@@ -1,7 +1,6 @@
 package search
 
 import (
-	"bufio"
 	"context"
 	"os"
 	"strings"
@@ -20,92 +19,59 @@ type Result struct {
 	ColNum int64
 }
 
+//All ищет все вхождение phrase в текстовых файлах files
 func All(ctx context.Context, phrase string, files []string) <-chan []Result {
-	// 1. run one goroutine for each file
-	// 2. Send each result to the chan channel
-	// 3. as soon as the search is completed • close the channel
-	results := []Result{}
+
 	ch := make(chan []Result)
-	goroutines := len(files)
+
 	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
 
-	for i := 0; i < goroutines; i++ {
+	ctx, cancel := context.WithCancel(ctx)
+
+	for i := 0; i < len(files); i++ {
 		wg.Add(1)
-		for _, f := range files {
-			go func(file string) {
-				line := GetLine(file, phrase)
-				lineNum := GetLineNum(file, phrase)
-				colNum := GetColNum(file, phrase)
 
-				result := Result{
-					Phrase:  phrase,
-					Line:    line,
-					LineNum: lineNum,
-					ColNum:  colNum,
-				}
+		go func(ctx context.Context, filename string, i int, ch chan<- []Result) {
+			defer wg.Done()
+			res := FindAllMatchTextInFile(phrase, filename)
 
-				mu.Lock()
-				results = append(results, result)
-				mu.Unlock()
-			}(f)
-		}
+			if len(res) > 0 {
+				ch <- res
+			}
+
+		}(ctx, files[i], i, ch)
+
+		go func() {
+			defer close(ch)
+			wg.Wait()
+		}()
+
 	}
-
-	ch <- results
+	cancel()
 	return ch
 }
 
-// function to get LineNum
-func GetLine(file, phrase string) (line string) {
-	lineNum := GetLineNum(file, phrase)
-	lastLine := int64(0)
-	f, _ := os.Open(file)
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		lastLine++
-		if lastLine == lineNum {
-			return sc.Text()
+func FindAllMatchTextInFile(phrase, fileName string) (res []Result) {
+	read, _ := os.ReadFile(fileName)
+	fstr := string(read)
+	filestr := strings.Split(fstr, "\n")
+
+	if len(filestr) > 0 {
+
+		filestr = filestr[:len(filestr)-1]
+	}
+	for i, line := range filestr {
+
+		if strings.Contains(line, phrase) {
+
+			result := Result{
+				Phrase:  phrase,
+				Line:    line,
+				LineNum: int64(i + 1),
+				ColNum:  int64(strings.Index(line, phrase)) + 1,
+			}
+			res = append(res, result)
 		}
 	}
-
-	return line
-}
-
-// function to get LineNum (starting with 1)
-func GetLineNum(file, phrase string) int64 {
-	NumLine := int64(0)
-	line := int64(1)
-	f, _ := os.Open(file)
-
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), phrase) {
-			NumLine = line
-		}
-		line++
-	}
-
-	return NumLine
-}
-
-// function to get ColNum (starting with 1)
-func GetColNum(file string, phrase string) int64 {
-	content, err := os.ReadFile(file)
-	if os.IsNotExist(err) {
-		return 0
-	}
-	if err != nil {
-		return 0
-	}
-
-	position := strings.Index(string(content), phrase)
-
-	position += 1
-
-	return int64(position)
-
+	return res
 }

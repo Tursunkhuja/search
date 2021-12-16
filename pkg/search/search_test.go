@@ -1,58 +1,23 @@
 package search
 
 import (
-	"os"
+	"context"
+	"log"
 	"testing"
 )
 
-func TestSearch_GetColNum(t *testing.T) {
-	filepath := "testfile.txt"
-	_, err := os.ReadFile(filepath)
+func TestAll(t *testing.T) {
 
-	if os.IsNotExist(err) {
-		t.Error("file does not exist")
-		return
-	}
-	if err != nil {
-		t.Errorf("error ocured while trying to open file %v", err)
-	}
+	ctx := context.Background()
+	files := []string{"testfile.txt"}
 
-	position := GetColNum(filepath, "Hello")
-	want := 1
-	if position != int64(want) {
-		t.Errorf("want: %v, get: %v", want, position)
+	ch := All(ctx, "Hello", files)
+
+	s, ok := <-ch
+
+	if !ok {
+		t.Errorf("fuction All error +> %v", ok)
 	}
 
-	position = GetColNum(filepath, "world")
-	want = 7
-	if position != int64(want) {
-		t.Errorf("want: %v, get: %v", want, position)
-	}
-
-}
-
-func TestSearch_GetLineNum(t *testing.T) {
-	filepath := "testfile.txt"
-
-	line := GetLineNum(filepath, "Hello")
-	want := 1
-	if line != int64(want) {
-		t.Errorf("want: %v, get: %v", want, line)
-	}
-
-	line2 := GetLineNum(filepath, "This")
-	want2 := 2
-	if line2 != int64(want2) {
-		t.Errorf("want: %v, get: %v", want2, line2)
-	}
-
-}
-
-func TestSearch_GetLine(t *testing.T) {
-	filepath := "testfile.txt"
-	line := GetLine(filepath, "This")
-	want := "This is Go"
-	if line != want {
-		t.Errorf("want: %v, get: %v", want, line)
-	}
+	log.Println("---------", s)
 }
