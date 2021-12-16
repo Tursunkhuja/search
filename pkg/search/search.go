@@ -2,7 +2,7 @@ package search
 
 import (
 	"context"
-	"os"
+	"io/ioutil"
 	"strings"
 	"sync"
 )
@@ -19,59 +19,102 @@ type Result struct {
 	ColNum int64
 }
 
-//All ищет все вхождение phrase в текстовых файлах files
+// FindMatchesInFile finds all phrase occurrences
+func FindMatchesInFile(phrase, file string, findingAll bool) ([]Result, error) {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []Result = nil
+	for i, line := range strings.Split(string(data), "\n") {
+		if strings.Contains(line, phrase) {
+			found := Result{
+				Phrase:  phrase,
+				Line:    line,
+				LineNum: int64(i + 1),
+				ColNum:  int64(strings.Index(line, phrase) + 1),
+			}
+
+			result = append(result, found)
+
+			if !findingAll {
+				return result, nil
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// All is the main function for finding occurrences of phrase in given list of files
 func All(ctx context.Context, phrase string, files []string) <-chan []Result {
-
 	ch := make(chan []Result)
-
 	wg := sync.WaitGroup{}
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	for i := 0; i < len(files); i++ {
+	for i, file := range files {
 		wg.Add(1)
 
 		go func(ctx context.Context, filename string, i int, ch chan<- []Result) {
 			defer wg.Done()
-			res := FindAllMatchTextInFile(phrase, filename)
 
-			if len(res) > 0 {
-				ch <- res
+			result, _ := FindMatchesInFile(phrase, filename, true)
+
+			if len(result) > 0 {
+				ch <- result
 			}
-
-		}(ctx, files[i], i, ch)
-
-		go func() {
-			defer close(ch)
-			wg.Wait()
-		}()
-
+		}(ctx, file, i, ch)
 	}
+
+	go func() {
+		defer close(ch)
+		wg.Wait()
+	}()
+
 	cancel()
 	return ch
 }
 
-func FindAllMatchTextInFile(phrase, fileName string) (res []Result) {
-	read, _ := os.ReadFile(fileName)
-	fstr := string(read)
-	filestr := strings.Split(fstr, "\n")
+// Any is the main function for finding one of the occurrences of phrase in given list of files
+func Any(ctx context.Context, phrase string, files []string) <-chan Result {
+	ch := make(chan Result)
+	wg := sync.WaitGroup{}
 
-	if len(filestr) > 0 {
+	ctx, cancel := context.WithCancel(ctx)
 
-		filestr = filestr[:len(filestr)-1]
-	}
-	for i, line := range filestr {
+	var result []Result
+	for _, file := range files {
+		current, err := FindMatchesInFile(phrase, file, false)
+		if err != nil {
+			continue
+		}
 
-		if strings.Contains(line, phrase) {
+		if len(current) > 0 {
+			result = current
 
-			result := Result{
-				Phrase:  phrase,
-				Line:    line,
-				LineNum: int64(i + 1),
-				ColNum:  int64(strings.Index(line, phrase)) + 1,
-			}
-			res = append(res, result)
+			break
 		}
 	}
-	return res
+
+	wg.Add(1)
+
+	go func(ctx context.Context, ch chan<- Result) {
+		defer wg.Done()
+
+		if len(result) > 0 {
+			ch <- result[0]
+		}
+		cancel()
+	}(ctx, ch)
+
+	go func() {
+		defer close(ch)
+		wg.Wait()
+	}()
+
+	cancel()
+
+	return ch
 }

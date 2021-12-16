@@ -2,22 +2,25 @@ package search
 
 import (
 	"context"
-	"log"
 	"testing"
 )
 
-func TestAll(t *testing.T) {
+func TestAll_success(t *testing.T) {
+	ch := All(context.Background(), "Hello", []string{"testfile.txt"})
 
-	ctx := context.Background()
-	files := []string{"testfile.txt"}
+	_, err := <-ch
 
-	ch := All(ctx, "Hello", files)
-
-	s, ok := <-ch
-
-	if !ok {
-		t.Errorf("fuction All error +> %v", ok)
+	if !err {
+		t.Error(err)
 	}
+}
 
-	log.Println("---------", s)
+func TestAny_success(t *testing.T) {
+	ch := Any(context.Background(), "Hello", []string{"testfile.txt"})
+
+	_, err := <-ch
+
+	if !err {
+		t.Error(err)
+	}
 }
