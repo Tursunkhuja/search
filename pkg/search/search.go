@@ -11,7 +11,7 @@ import (
 //Resuлt описывает один результат поиска.
 type Result struct {
 	//The phrase you were looking for
-	Pharse string
+	Phrase string
 	//Entire line in which the entry was found without \ n or \ r \ n at the end
 	Line string
 	//line number (starting from 1) where the entry was found
@@ -39,7 +39,7 @@ func All(ctx context.Context, phrase string, files []string) <-chan []Result {
 				colNum := GetColNum(file, phrase)
 
 				result := Result{
-					Pharse:  phrase,
+					Phrase:  phrase,
 					Line:    line,
 					LineNum: lineNum,
 					ColNum:  colNum,
